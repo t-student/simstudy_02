@@ -100,8 +100,6 @@ sim_forecast <- function(n_sim = 1000,
 
 
 
-
-
 l1 <- sim_forecast()
 
 par(mfrow=c(2,1))
