@@ -1,5 +1,6 @@
 ---
-title: "Bayesian Adaptive Methods for Clinical Trials - Example 1"
+title: "Bayesian Adaptive Methods for Clinical Trials - Example 2"
+subtitle: "Indifference Zones"
 output:
   pdf_document: default
   html_notebook: default
@@ -8,30 +9,27 @@ output:
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 ---
 
+The notion of an indifference zone $[\delta_l, \delta_u]$ naturally arises when comparing two treatments and a treatment effect estimate $\Delta$ equating to the difference between the control and treatment arms. We may abandon our experiment if $Pr(\Delta > \delta_u)$ is sufficiently small (thus favouring the control) and similarly if $Pr(\Delta < \delta_l)$ is sufficiently small (favouring the treatment). 
 
-
-At the first interim we have enrolled $n_1$ patients. Each patient has a successful outcome $Y_i = 1$ or failure $Y_i = 0$. Assuming independence of patients and constant $p$ we get $X = \sum(Y_i)$. If we have observed $n_1$ patients then $X_1 \sim Bin(n_1, p)$. Using a conjugate $Beta(a, b)$ prior for $p$ we get posterior $Beta(X_1 + a, n_1 - X_1 + b)$ for $p$. If our prior is uniform $Beta(1, 1)$ this gives us $Beta(X_1 + 1, n_1 - X_1 + 1)$.
-
-Say we have the option of enrolling an additional $n_2$ patients. The current posterior serves as a prior. We combine the prior with the likelihood $X_2 \sim Bin(n_2, p)$ which gives us posterior 
-$p \sim Beta(X_1 + X_2 + 1, n_1 - X_1 + 1 + n_2 - X_2)$. 
-
-The predictive point of view argues that we should sample from the interim posterior giving values $p_j^*$ from which we should simulate $X^*_{2j}$ from the $Bin(n_2, p_j^*)$ likelihood. Using these simulated values we can then make some decisions on the merits of keeping the trial going or quitting because it appears like a futile effort.
-
-In practice we want to estimate quantiles from the posterior predictive distributions and will continue with the trial if the probability that the distribution of a pre-specified lower bound is above a given threshold is reasonably high, e.g. $Pr(p_{0.025} > 0.85) > 0.8$. Let's look at an example.
  
 
 ```{r}
 library(rethinking)
 library(tidyverse)
 
-# Imagine a preliminary study had n1 patients of which x1 were (successful) events.
-n1 <- 117
-x1 <- 110
 
-# Assuming a uniform prior, the posterior for p based on the preliminary study is:
-post_1 <- rbeta(1e4, shape1 = x1 + 1, shape2 = n1 - x1 + 1)
+p_ctl <- 0.2
+p_trt <- 0.1
 
-rethinking::dens(post_1)
+lambda_0 <- log(p_ctl / (1-p_ctl))
+lambda_1 <- log(p_trt / (1-p_trt)) - lambda_0 
+
+or_trt <- exp(lambda_1)
+
+
+
+
+
 
 ```
 
