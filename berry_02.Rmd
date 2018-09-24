@@ -9,26 +9,79 @@ output:
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 ---
 
-The notion of an indifference zone $[\delta_l, \delta_u]$ naturally arises when comparing two treatments and a treatment effect estimate $\Delta$ equating to the difference between the control and treatment arms. We may abandon our experiment if $Pr(\Delta > \delta_u)$ is sufficiently small (thus favouring the control) and similarly if $Pr(\Delta < \delta_l)$ is sufficiently small (favouring the treatment). 
+The notion of an indifference zone $[\delta_l, \delta_u]$ naturally arises when comparing two treatments and a treatment effect estimate $\Delta$ that equates to the difference between the control and treatment arms. If $Pr(\Delta > \delta_u)$ is small we would favour the control and similarly if $Pr(\Delta < \delta_l)$ is small we would favour the treatment. 
 
- 
+We might also look at where the credible interval for $\Delta$ sits with regards to the $[\delta_l, \delta_u]$ indifference zone. If the credible interval sits entirely within the indifference zone then we can assume equivalence. However, if the credible interval crossed $\delta_l$ or was entirely below $\delta_l$ then we conclude the control is better. We can come to an analogous conclusion for the treatment if the credible interval crossed or was entirely above $\delta_u$.
+
+TODO come back to type 1 error...
+
+Let's consider an experiment on two groups requiring participants to complete a complex task. One group can reference an existing manual, the other has a new manual. Historically around 60% of people using it can complete the task. We want whether the new manual improves the participants ability to complete the task. A natural model for this situation is logistic regression:
+
+$$
+logit(p_i) = log \left( \frac{p_i}{1-p_i} \right) = \lambda_0 + \lambda_1 x_i
+$$
+
+The p_i corresponds to the probability of completing the task conditional on treatment group, indicated by $x_i$. The $\lambda_0$ and $\lambda_1$ are the logarithm of the baseline odds and the the treatment effect.
+
 
 ```{r}
-library(rethinking)
-library(tidyverse)
+
+# TODO
+# http://www.flutterbys.com.au/stats/tut/tut12.10.html
+# http://faculty.washington.edu/jonno/SISG-2011/lectures/JW-Lec3_2.pdf
+# http://faculty.washington.edu/jonno/SISMIDmaterial/2-RINLA.pdf
+# https://www.precision-analytics.ca/blog-1/inla
+# https://www.ntnu.edu/employees/thiago.guerrera
 
 
-p_ctl <- 0.2
-p_trt <- 0.1
+
+# Need INLA:
+# install.packages("INLA", repos=c(getOption("repos"), INLA="https://inla.r-inla-download.org/R/stable"), dep=TRUE)
+
+suppressMessages(library("rethinking"))
+suppressMessages(library("tidyverse"))
+suppressMessages(library("INLA"))
+suppressMessages(library("pwr"))
+
+# Suggests we need ~350 per arm to see such a difference
+pwr.2p.test(h = ES.h(p1 = 0.6, p2 = 0.7), sig.level = 0.05, power = .80)
+
+p_ctl <- 0.6
+p_trt <- 0.7
 
 lambda_0 <- log(p_ctl / (1-p_ctl))
 lambda_1 <- log(p_trt / (1-p_trt)) - lambda_0 
 
-or_trt <- exp(lambda_1)
+n_p_arm <- 400
 
+x <- rep(0:1, each = n_p_arm)
+set.seed(4)
+linpred <- lambda_0 + lambda_1 * x
+y.pred <- rethinking::inv_logit(linpred)
+y <- rbinom(length(x), size = 1, prob = y.pred)
+table(x, y)
 
+df_mod <- data.frame(x = x, y = y)
 
+summary(lm1 <- glm(y ~ x, family = "binomial", data = df_mod))
+exp(c(lambda_0, lambda_1))
+exp(coef(lm1))
+exp(confint(lm1))
 
+# cpo - A boolean variable if the cross-validated predictive measures 
+# (cpo, pit) should be computed (default FALSE)
+summary(lm2 <- inla(y ~ x , family = c("binomial"), 
+                    control.family=list(link='logit'), 
+                    control.compute=list(cpo=TRUE),
+                    data = df_mod) )
+
+post <- data.frame(lm2$marginals.fixed[[2]])
+head(post)
+
+ggplot(post, aes(x=exp(x), y=y)) +
+  geom_line()+
+  scale_x_continuous(limits = c(0, 10)) +
+  geom_vline(xintercept = exp(lambda_1))
 
 
 ```

@@ -6,6 +6,7 @@ output:
   html_document:
     df_print: paged
 date: "`r format(Sys.time(), '%d %B, %Y')`"
+latex_engine: xelatex 
 ---
 
 
@@ -21,8 +22,8 @@ In practice we want to estimate quantiles from the posterior predictive distribu
  
 
 ```{r}
-library(rethinking)
-library(tidyverse)
+suppressMessages(library("rethinking"))
+suppressMessages(library("tidyverse"))
 
 # Imagine a preliminary study had n1 patients of which x1 were (successful) events.
 n1 <- 117
@@ -31,11 +32,15 @@ x1 <- 110
 # Assuming a uniform prior, the posterior for p based on the preliminary study is:
 post_1 <- rbeta(1e4, shape1 = x1 + 1, shape2 = n1 - x1 + 1)
 
-rethinking::dens(post_1)
+# Lets say we want to achieve at least an 85% success
+sum(post_1 > 0.85)/length(post_1)
+
+rethinking::dens(post_1, main = "Posterior from Interim 1")
+abline(v = 0.85, col = "red")
 
 ```
 
-The preliminary study looks promising, should we enrol more participants? Let's simulate and see if keeping the trial going makes sense. First we simulate the number of events arising from 1000 separate trial populations each comprising 200 patients.
+The preliminary study looks promising in that this single look at the data suggests that there is a (nearly) 100% probability that our success rate is $\ge 0.85$, should we enrol more participants? Let's simulate this next stage of the trial and see if keeping it going makes sense. Let's say we could enrol another $n_2 = 200$ patients. To simulate we generate a 1000 separate trial populations each comprising 200 patients and each trial population will have the number of successes parameterised by the first interim posterior distribution (`post_1`).
 
 ```{r}
 n2 <- 200
@@ -49,7 +54,7 @@ x2 <- rbinom(n_trial_pops, n2, prob = post_1)
 rethinking::simplehist(x2)
 ```
 
-So typically, we get about 185 to 190 successes out of 200. We iterate through each of the simulated trial populations and generate the posterior distribution based on the number of successful events at the end of each study.
+So typically, based on the histogram, about 185 to 190 of the 200 participants have a successesful outcome. We iterate through each of the simulated trial populations and generate the posterior distribution based on the number of successful events at the end of each study. Again, all we need to do is update the conjugate beta posterior. 
 
 ```{r}
 post_2 <- numeric(n_sims * n_trial_pops)
@@ -63,7 +68,7 @@ for(i in 1:length(x2)){
 
 ```
 
-We can examine the posteriors arising from a subset of our simualted populations to get a sense of the heterogenity.
+Let's examine the posteriors arising from (a subset of) our simualted populations to get a sense of the heterogenity.
 
 ```{r}
 df_post_2 <- as.data.frame(post_2) 
@@ -77,14 +82,14 @@ ggplot(df_post_2_sub, aes(x = p, group = sim)) +
 
 ```
 
-Each trial produces an empirical distribution for $p^*_j$ and there is quite a bit of variation as seen above. However, our particular interest is in a pre-specified quantile ($p_{0.025}$) from each of these posteriors. We extract the lower bounds from each of our posterior distributions and then plot the distribution of this quantile.
+Each trial produces an empirical distribution for $p^*_j$ and there is quite a bit of variation as seen above. We could then extract a lower bound (say the 2.5 percentile) from each of these posteriors.
 
 ```{r}
 post_2_q_025 <- apply(post_2, 2, quantile, 0.025)
 rethinking::dens(post_2_q_025)
 ```
 
-Finally, we assess the probability of this quantile (that represents a lower bound from each of the simulated studies) against our decision criteria. Our conclusion is that, on the basis of the simulations and the data collected to date, there is a good chance that the trial will have a success rate in excess of our threshold criteria and so we should go ahead and enrol the next $n_2$ patients.
+Finally, we assess the probability that this quantile (that represents a lower bound arising from each of the simulated studies) will occur against our decision criteria - let's say we will not go ahead unless there is an 80% chance that our lower bound is going be greater than 0.85 success rate. For this particular scenario it looks like there is a good chance that the trial will be worth continuing so we enrol a further $n_2$ patients.
 
 ```{r}
 # Descision threshold. 
@@ -92,7 +97,7 @@ Finally, we assess the probability of this quantile (that represents a lower bou
 
 prob_p_025 <- sum(post_2_q_025 > 0.85) / length(post_2_q_025)
 
-sprintf("Probability that 2.5%% quantile > 0.8 = %.3f ", prob_p_025)
+sprintf("Probability that 2.5%% quantile > 0.85 = %.3f ", prob_p_025)
 
 ifelse(prob_p_025 > 0.8, 
        paste("Continue trial"), 
