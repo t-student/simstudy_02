@@ -64,24 +64,71 @@ table(x, y)
 df_mod <- data.frame(x = x, y = y)
 
 summary(lm1 <- glm(y ~ x, family = "binomial", data = df_mod))
-exp(c(lambda_0, lambda_1))
-exp(coef(lm1))
-exp(confint(lm1))
 
-# cpo - A boolean variable if the cross-validated predictive measures 
-# (cpo, pit) should be computed (default FALSE)
-summary(lm2 <- inla(y ~ x , family = c("binomial"), 
-                    control.family=list(link='logit'), 
-                    control.compute=list(cpo=TRUE),
-                    data = df_mod) )
+lm2 <- inla(y ~ x, 
+            family = "binomial", 
+            data = df_mod, 
+            Ntrials=rep(1, nrow(df_mod)),
+            control.compute=list(config = TRUE))
+summary(lm2)
 
+# To get the credible interval for the parameter estimate
+lm2$summary.fixed
+
+# This is just the density at each value of x. 
+# Therefore it is the literal pdf rather than samples from the post.
+# Note that the untransformed version integrates to 1 but as
+# soon as you exponentiate to get the odds ratio, you are dealing with
+# an improper prior.
 post <- data.frame(lm2$marginals.fixed[[2]])
 head(post)
+
+# post a true pdf, i.e integrates to 1:
+DescTools::AUC(post$x, post$y)
+DescTools::AUC(exp(post$x), post$y)
+
+# post$x <- exp(post$x)
+# 
+# post <- post[post$x > 0.4 & post$x < 3.1,]
+# 
+# integrate(approxfun(post$x, post$y), lower = 0.55, upper = 2.9)
+
+
+
+
+
+# Max aposterior
+map_1 <- rethinking::map(
+  alist(
+    y ~ dbinom(1, p),
+    logit(p) <- b0 +  b1 * x,
+    b0 ~ dnorm(0, 10),
+    b1 ~ dnorm(0, 10)
+  ),
+  data = df_mod
+)
+
+precis(map_1)
+post_map <- extract.samples(map_1)
+
+plot(density(post_map$b1))
+
+
+dens <- density(exp(post_map$b1))
+DescTools::AUC(dens$x, dens$y)
+df_post_map <- data.frame(x = dens$x, y = dens$y)
+
+# Compare
+exp(confint(lm1))
+quantile(exp(post[,2]), probs = c(0.025, 0.975))
+quantile(exp(post_map[,2]), probs = c(0.025, 0.975))
 
 ggplot(post, aes(x=exp(x), y=y)) +
   geom_line()+
   scale_x_continuous(limits = c(0, 10)) +
-  geom_vline(xintercept = exp(lambda_1))
+  geom_vline(xintercept = exp(lambda_1)) +
+  geom_line(data = df_post_map, aes(x = x, y = y), 
+               inherit.aes = F, colour = "red")
 
 
 ```
